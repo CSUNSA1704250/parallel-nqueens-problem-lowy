@@ -53,7 +53,7 @@ int main( int argc , char** argv ){
     }
     int nro_reinas = atoi(argv[4]);
     std::string type = argv[2];
-    std::cout << type << std::endl;
+    //std::cout << type << std::endl;
     std::vector<int> vector_reinas(nro_reinas,-1);
     std::vector<std::string> reinas_solutions;
     std::fstream archive;
