@@ -36,11 +36,14 @@ void n_queens( std::vector<int> vector_reinas , int actual_column , int queens_s
         }
         reinas_solution.push_back(res);
     }else{
-        #pragma omp parallel for private(i,actual_column)
+        #pragma omp parallel for private(i)
         for( int i = 0 ; i < queens_size ; i++ ){
             vector_reinas[actual_column] = i;
-            if( check(vector_reinas , actual_column) ){
-                n_queens(vector_reinas , actual_column+1 , queens_size , reinas_solution);
+            #pragma omp task
+            {
+                if( check(vector_reinas , actual_column) ){
+                    n_queens(vector_reinas , actual_column+1 , queens_size , reinas_solution);
+                }
             }
         }
     }
