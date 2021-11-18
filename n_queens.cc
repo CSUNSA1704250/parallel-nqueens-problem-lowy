@@ -1,50 +1,51 @@
 #include <iostream>
-#include <vector>
-#include <pthread.h>
 #include <thread>
 #include <omp.h>
-#include <chrono>
 #include <fstream>
 #include <string>
-#include <typeinfo>
+#include <sstream>
+#include <iomanip>
 
-template <typename T>
-T v_abs( T x_num ){
-    return x_num >= 0 ? x_num : -x_num;
-}
-
-void print( std::vector<int>& le_vector ){
-    std::cout << "[ ";
-    for( auto x : le_vector )
-        std::cout << x << ' ';
-    std::cout << "]\n";
-}
-
-bool check( std::vector<int> vector_reinas , int column ){
-    for( int i = 0 ; i < column ; i++ )
-        if( vector_reinas[column] == vector_reinas[i] || (v_abs( vector_reinas[column] - vector_reinas[i] ) == v_abs( column - i ) ) )
-            return false;
-    return true;
-}
-
-void n_queens( std::vector<int> vector_reinas , int actual_column , int queens_size , std::vector<std::string>& reinas_solution ){
-    if(actual_column == queens_size){
-        std::string res;
-        for(auto x : vector_reinas){
-            res.append(std::to_string(x+1));
-            res.append(" ");
+void check(int queens[], int row, int column, int& solutions , std::ostringstream& globalText , int& nro_reinas) {
+    for(int i = 0; i < row; i++) {
+        if (queens[i] == column) return;
+            
+        if (abs(queens[i] - column) == (row- i)) return;
+    }
+    queens[row] = column;
+    if(row == nro_reinas-1) {
+        #pragma omp critical
+            solutions++;
+        std::ostringstream oss;
+        for (int row = 0; row < nro_reinas; row++) {
+            for (int column = 0; column < nro_reinas; column++) {
+                if (queens[row] == column) {
+                    oss << column+1;
+                }
+            }
+            oss  << ' ';
         }
-        reinas_solution.push_back(res);
-    }else{
-        #pragma omp parallel for shared(actual_column)
-        for( int i = 0 ; i < queens_size ; i++ ){
-            vector_reinas[actual_column] = i;
-            if( check(vector_reinas , actual_column) ){
-                n_queens(vector_reinas , actual_column+1 , queens_size , reinas_solution);
+        #pragma omp critical
+        globalText << solutions << " " << oss.str() << std::endl;
+    }
+    else {
+        for(int i = 0; i < nro_reinas; i++) {
+            check(queens, row + 1, i,solutions,globalText,nro_reinas);
+        }
+    }
+}
+
+void n_queens(int& solutions , std::ostringstream& globalText, int nro_reinas) {
+    #pragma omp parallel 
+    #pragma omp single
+    {
+        for(int i = 0; i < nro_reinas; i++) {
+            #pragma omp task
+            { 
+                check(new int[nro_reinas], 0, i,solutions,globalText,nro_reinas);
             }
         }
     }
-    
 }
 
 int main( int argc , char** argv ){
@@ -53,46 +54,41 @@ int main( int argc , char** argv ){
     }
     int nro_reinas = atoi(argv[4]);
     std::string type = argv[2];
-    //std::cout << type << std::endl;
-    std::vector<int> vector_reinas(nro_reinas,-1);
-    std::vector<std::string> reinas_solutions;
+    int solutions = 0;
+    std::ostringstream globalText;
+    n_queens(solutions,globalText,nro_reinas);
     std::fstream archive;
-    //auto start = std::chrono::steady_clock::now();
-    n_queens(vector_reinas , 0 , nro_reinas , reinas_solutions );
-    //auto finish = std::chrono::steady_clock::now();
-    //std::cout << "Tiempo transcurrido con " << nro_reinas << " : " << std::chrono::duration_cast<std::chrono::microseconds>(finish - start).count() << std::endl;
-    //return 0;
-    if(type == "all"){
-        archive.open("solutions.txt",std::ios::out);
-        archive << "#Solutions for " << nro_reinas << " queens\n";
-        archive << reinas_solutions.size() << "\n";
-        int line_couter = 1;
-        for(auto x : reinas_solutions){
-            archive << line_couter << " " << x << '\n';
-            line_couter++;
-        }
-    }
-        
+    archive.open("solutions.txt",std::ios::out);
+    archive << "#Solutions for " << nro_reinas << " queens\n";
+    archive << solutions << std::endl;
+    archive << globalText.str();
+    archive.close();
+    //std::cout << "Tamanho: " << nro_reinas << std::endl; 
+    //std::cout << "Total soluciones: " << solutions << std::endl; 
     if(type == "find"){
-        archive.open("solution.dot",std::ios::out);
-        std::string random_solution = reinas_solutions[rand()%(reinas_solutions.size()-1)];
-        archive << "Digraph D {\n";
-        archive << "\t node[shape=plaintext]\n";
-        archive << "\t some_node [ \n";
-        archive << "\t\t label=< \n";
-        archive << "\t\t\t <table border=\"0\" cellborder=\"1\" cellspacing=\"0\">";
+        std::fstream archivedot;
+        archivedot.open("solution.dot",std::ios::out);
+        std::ifstream archive("solutions.txt");
+        std::string line;
+        getline(archive,line);
+        getline(archive,line);
+        getline(archive,line);
+        archivedot << "Digraph D {\n";
+        archivedot << "\t node[shape=plaintext]\n";
+        archivedot << "\t some_node [ \n";
+        archivedot << "\t\t label=< \n";
+        archivedot << "\t\t\t <table border=\"0\" cellborder=\"1\" cellspacing=\"0\">";
         for(int i = 0 ; i < nro_reinas ; i++ ){
-            archive << "<tr> ";
-            for( int j = 0 ; j < nro_reinas ; j++ ){
-                if( j == ((int)random_solution[i*2]-48)-1 ){
-                    
-                    archive << "<td>&#9813;</td> ";
+            archivedot << "<tr> ";
+            for( int j = 2 ; j < line.size() ; j+=2 ){
+                if( j == ((int)line[i*2]-48)-1 ){
+                    archivedot << "<td>&#9813;</td> ";
                 }else
-                    archive << "<td> </td> ";
+                    archivedot << "<td> </td> ";
             }
-            archive << " </tr>\n";
+            archivedot << " </tr>\n";
         }
-        archive << "</table>>];}";
+        archivedot << "</table>>];}";
     }
 
     return 0;
